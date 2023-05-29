@@ -1,0 +1,164 @@
+# kubectl create namespace wordpress --output yaml --dry-run=client > manifest.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: wordpress
+
+---
+# kubectl create deployment wp-db --namespace wordpress --image mariadb --dry-run=client --output yaml > database.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: wp-db
+    tier: backend
+    env: prod
+    customer: tuke
+  name: wp-db
+  namespace: wordpress
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: wp-db
+  template:
+    metadata:
+      labels:
+        app: wp-db
+    spec:
+      containers:
+        - image: mariadb
+          name: mariadb
+          env:
+            - name: MARIADB_ROOT_PASSWORD
+              value: top.secret
+            - name: MARIADB_DATABASE
+              value: wordpress
+            - name: MARIADB_USER
+              value: wpuser
+            - name: MARIADB_PASSWORD
+              value: end321
+
+---
+# kubectl expose deployment wp-db --port 3306  --namespace wordpress --dry-run=client --output yaml >> database.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: wp-db
+    customer: tuke
+    env: prod
+    tier: backend
+  name: wp-db
+  namespace: wordpress
+spec:
+  ports:
+    - port: 3306
+      protocol: TCP
+      targetPort: 3306
+  selector:
+    app: wp-db
+
+---
+# kubectl create deployment wp-app --namespace wordpress --image wordpress --replicas 4 --dry-run=client --output yaml > application.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: wp-app
+    tier: frontend
+    env: prod
+    customer: tuke
+  name: wp-app
+  namespace: wordpress
+spec:
+  replicas: 4
+  selector:
+    matchLabels:
+      app: wp-app
+  template:
+    metadata:
+      labels:
+        app: wp-app
+    spec:
+      containers:
+        - image: wordpress
+          name: wordpress
+          env:
+            - name: WORDPRESS_DB_USER
+              value: wpuser
+            - name: WORDPRESS_DB_PASSWORD
+              value: end321
+            - name: WORDPRESS_DB_HOST
+              value: wp-db
+            - name: WORDPRESS_DB_NAME
+              value: wordpress
+
+---
+# kubectl expose deployment wp-app --namespace wordpress --port 80 --type LoadBalancer --dry-run=client --output yaml >> application.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: wp-app
+    customer: tuke
+    env: prod
+    tier: frontend
+  name: wp-app
+  namespace: wordpress
+spec:
+  ports:
+    - port: 8000
+      protocol: TCP
+      targetPort: 80
+  selector:
+    app: wp-app
+  type: LoadBalancer
+
+---
+# kubectl create deployment wp-adminer --image adminer --namespace wordpress --dry-run=client --output=yaml > adminer.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: wp-adminer
+    tier: frontend
+    env: dev
+  name: wp-adminer
+  namespace: wordpress
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: wp-adminer
+  template:
+    metadata:
+      labels:
+        app: wp-adminer
+    spec:
+      containers:
+        - image: adminer
+          name: adminer
+          env:
+            - name: ADMINER_DEFAULT_SERVER
+              value: wp-db
+
+---
+# kubectl expose deployment wp-adminer --namespace wordpress --type NodePort --port 8080 --dry-run=client --output yaml >> adminer.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: wp-adminer
+    env: dev
+    tier: frontend
+  name: wp-adminer
+  namespace: wordpress
+spec:
+  ports:
+    - port: 8080
+      protocol: TCP
+      targetPort: 8080
+  selector:
+    app: wp-adminer
+  type: NodePort
